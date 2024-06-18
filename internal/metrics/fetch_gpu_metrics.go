@@ -3,11 +3,16 @@ package gpumetrics
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
+	"golang.org/x/sync/errgroup"
 )
+
+type GpuResult struct {
+	index int
+	gpu   *NvidiaDevice
+}
 
 // FetchGpuInfo fetches the metrics for all GPU devices
 func FetchAllGpuInfo(ctx context.Context, gpu GpuDeviceManager, count int) (GpuMap, error) {
@@ -16,10 +21,14 @@ func FetchAllGpuInfo(ctx context.Context, gpu GpuDeviceManager, count int) (GpuM
 		return nil, fmt.Errorf("no GPU devices found")
 	}
 
+	var mu sync.Mutex
+
+	errGroup, ctx := errgroup.WithContext(ctx)
+
 	gpuMap := make(GpuMap)
 
-	// gpuChan := make(chan GpuMap, count)
-	// defer close(gpuChan)
+	gpuResChan := make(chan *GpuResult, count) // Buffered channel for results
+	defer close(gpuResChan)
 
 	errChan := make(chan error, 1) // only need to store one error
 	defer close(errChan)
@@ -28,46 +37,70 @@ func FetchAllGpuInfo(ctx context.Context, gpu GpuDeviceManager, count int) (GpuM
 	wg.Add(count)
 
 	for i := 0; i < count; i++ {
-		go func(i int) {
+
+		index := i
+		errGroup.Go(func() error {
 			defer wg.Done()
 
-			// context done means there has been a cancellation signal
-			select {
-			case <-ctx.Done():
+			res, err := fetchGpuMetrics(gpu, index)
+			if err != nil {
+				errChan <- err
+			}
+
+			if ctx.Err() != nil {
 				errChan <- ctx.Err()
-				return
-			default:
 			}
 
-			device, ret := gpu.DeviceGetHandleByIndex(i)
-			if ret != nvml.SUCCESS {
-				errChan <- fmt.Errorf("failed to get device handle: %v", ret)
-				return
-			}
+			mu.Lock()
+			defer mu.Unlock()
 
-			g, err := FetchDeviceMetrics(device)
-			if err != nvml.SUCCESS {
-				errChan <- fmt.Errorf("failed to get device info: %v", err)
-				return
-			}
+			gpuResChan <- res
 
-			gpuMap[i] = g
-		}(i)
+			return nil
+		})
 	}
 
-	// main goroutine waits for all goroutines to finish
 	wg.Wait()
 
-	for i := 0; i < count; i++ {
-		select {
-		case <-ctx.Done(): // if context is done, ( cancelled or timeout ) return ctx.err
-			return nil, ctx.Err()
-		case err := <-errChan: // if there is an error, return err
-			return nil, err
-		default:
-			log.Printf("Fetched Metrics for GPU %d\n", i)
-		}
+	// main goroutine reads from gpuResChan and updates the gpuMap
+	for res := range gpuResChan {
+		gpuMap[res.index] = res.gpu
+	}
+
+	if err := errGroup.Wait(); err != nil {
+		return nil, err
+	}
+
+	if len(gpuMap) == 0 {
+		return nil, fmt.Errorf("no GPU devices found")
+	}
+
+	if len(gpuMap) != count {
+		return nil, fmt.Errorf("expected %d GPU devices, got %d", count, len(gpuMap))
+	}
+
+	if len(errChan) > 0 {
+		return nil, <-errChan
 	}
 
 	return gpuMap, nil
+}
+
+func fetchGpuMetrics(gpuDeviceManager GpuDeviceManager, index int) (*GpuResult, error) {
+	device, ret := gpuDeviceManager.DeviceGetHandleByIndex(index)
+	if ret != nvml.SUCCESS {
+		return nil, fmt.Errorf("failed to get device handle: %v", ret)
+	}
+
+	g, err := FetchDeviceMetrics(device)
+	if err != nvml.SUCCESS {
+		return nil, err
+	}
+
+	deviceInfo := &GpuResult{
+		index: index,
+		gpu:   g,
+	}
+
+	return deviceInfo, nil
 }
