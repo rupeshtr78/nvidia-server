@@ -1,158 +1,114 @@
 package gpumetrics
 
-// func TestFetchAllGpuInfo_HappyPath(t *testing.T) {
-// 	// Create a mock GpuDeviceManager
-// 	gpu := &mockGpuDeviceManager{}
+import (
+	"context"
+	"testing"
 
-// 	// Set up the mock to return 2 devices
-// 	gpu.On("DeviceGetCount").Return(2, nvml.SUCCESS)
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+)
 
-// 	// Set up the mock to return device handles for each index
-// 	gpu.On("DeviceGetHandleByIndex", 0).Return(&nvml.Device{}, nvml.SUCCESS)
-// 	gpu.On("DeviceGetHandleByIndex", 1).Return(&nvml.Device{}, nvml.SUCCESS)
+func TestFetchAllGpuInfoV2(t *testing.T) {
+	mockDeviceManager := new(MockGpuDeviceManager)
 
-// 	// Set up the mock to return metrics for each device
-// 	gpu.On("FetchDeviceMetrics", &nvml.Device{}).Return(&NvidiaDevice{}, nvml.SUCCESS)
-// 	gpu.On("FetchDeviceMetrics", &nvml.Device{}).Return(&NvidiaDevice{}, nvml.SUCCESS)
+	// Happy path test
+	t.Run("HappyPath", func(t *testing.T) {
+		mockDeviceManager.On("DeviceGetHandleByIndex").Return(&MockNvmlDevice{}, nvml.SUCCESS)
+		mockDeviceManager.On("GetUUID").Return("mock-uuid", nvml.SUCCESS)
+		mockDeviceManager.On("GetName").Return("mock-name", nvml.SUCCESS)
+		mockDeviceManager.On("GetTemperature").Return(42, nvml.SUCCESS)
+		mockDeviceManager.On("GetPowerUsage").Return(100, nvml.SUCCESS)
+		mockDeviceManager.On("GetMemoryInfo").Return(nvml.Memory{Total: 1024}, nvml.SUCCESS)
 
-// 	// Create a context
-// 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-// 	defer cancel()
+		gpuCount := 1
+		info, err := FetchAllGpuInfo(context.Background(), mockDeviceManager, gpuCount)
+		assert.NoError(t, err)
+		assert.Len(t, info, gpuCount)
+	})
 
-// 	// Call the function under test
-// 	gpuMap, err := FetchAllGpuInfo(ctx, gpu, 2)
+	// Error handling test
+	t.Run("ErrorHandling", func(t *testing.T) {
+		mockDeviceManager.On("DeviceGetHandleByIndex").Return(nil, nvml.ERROR_UNKNOWN)
+		gpuCount := 1
+		info, err := FetchAllGpuInfo(context.Background(), mockDeviceManager, gpuCount)
+		assert.Error(t, err)
+		assert.Len(t, info, 0)
+	})
 
-// 	// Assert the result
-// 	if err != nil {
-// 		t.Errorf("Expected no error, but got %v", err)
-// 	}
-// 	if len(gpuMap) != 2 {
-// 		t.Errorf("Expected 2 GPUs in the map, but got %d", len(gpuMap))
-// 	}
-// }
+	// Edge case test: empty list of GPUs
+	t.Run("EmptyList", func(t *testing.T) {
+		mockDeviceManager.On("DeviceGetHandleByIndex").Return(nil, nvml.ERROR_UNKNOWN)
+		gpuCount := 0
+		info, err := FetchAllGpuInfo(context.Background(), mockDeviceManager, gpuCount)
+		assert.NoError(t, err)
+		assert.Len(t, info, 0)
+	})
+}
 
-// func TestFetchAllGpuInfo_NoDevices(t *testing.T) {
-// 	// Create a mock GpuDeviceManager
-// 	gpu := &mockGpuDeviceManager{}
+type MockGpuDeviceManager struct {
+	mock.Mock
+	// Mocked method return values
+	DeviceGetCountReturn         int
+	DeviceErr                    nvml.Return
+	DeviceGetHandleByIndexReturn nvml.Device
+	DeviceGetHandleByIndexErr    nvml.Return
+	DeviceReturn                 nvml.Device
+	// ... add more mocked method return values as needed
 
-// 	// Set up the mock to return 0 devices
-// 	gpu.On("DeviceGetCount").Return(0, nvml.SUCCESS)
+	// Call counters for testing purposes
+	DeviceGetCountCallCount         int
+	DeviceGetHandleByIndexCallCount int
+	// ... add more call counters as needed
+}
 
-// 	// Create a context
-// 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-// 	defer cancel()
+func (m *MockGpuDeviceManager) DeviceGetCount() (int, nvml.Return) {
+	m.DeviceGetCountCallCount++
+	return m.DeviceGetCountReturn, m.DeviceErr
+}
 
-// 	// Call the function under test
-// 	gpuMap, err := FetchAllGpuInfo(ctx, gpu, 0)
+func (m *MockGpuDeviceManager) DeviceGetHandleByIndex(index int) (nvml.Device, nvml.Return) {
+	m.DeviceGetHandleByIndexCallCount++
+	return m.DeviceGetHandleByIndexReturn, m.DeviceGetHandleByIndexErr
+}
 
-// 	// Assert the result
-// 	if err != nil {
-// 		t.Errorf("Expected no error, but got %v", err)
-// 	}
-// 	if len(gpuMap) != 0 {
-// 		t.Errorf("Expected 0 GPUs in the map, but got %d", len(gpuMap))
-// 	}
-// }
+func (m *MockGpuDeviceManager) GetDevice() nvml.Device {
+	return m.DeviceReturn
+}
 
-// func TestFetchAllGpuInfo_ContextCancellationV2(t *testing.T) {
-// 	// Create a mock GpuDeviceManager
-// 	gpu := &mockGpuDeviceManager{}
+func (m *MockGpuDeviceManager) Init() nvml.Return {
+	return nvml.SUCCESS
+}
 
-// 	// Set up the mock to return 2 devices
-// 	gpu.On("DeviceGetCount").Return(2, nvml.SUCCESS)
+func (m *MockGpuDeviceManager) Shutdown() nvml.Return {
+	return nvml.SUCCESS
+}
 
-// 	// Create a context
-// 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-// 	defer cancel()
+func (m *MockGpuDeviceManager) Reset() {
+	// Reset call counters and return values
+	m.DeviceGetCountCallCount = 0
+	m.DeviceGetHandleByIndexCallCount = 0
+	m.DeviceGetCountReturn = 0
+	m.DeviceErr = nvml.SUCCESS
+	m.DeviceGetHandleByIndexReturn = nil
+	m.DeviceGetHandleByIndexErr = nvml.SUCCESS
+}
 
-// 	// Cancel the context immediately
-// 	cancel()
+type MockNvmlDevice struct {
+	mock.Mock
+}
 
-// 	// Call the function under test
-// 	gpuMap, err := FetchAllGpuInfo(ctx, gpu, 2)
+func (m *MockNvmlDevice) DeviceGetCount() (int, nvml.Return) {
+	args := m.Called()
+	return args.Get(0).(int), args.Get(1).(nvml.Return)
+}
 
-// 	// Assert the result
-// 	if err == nil {
-// 		t.Errorf("Expected an error due to context cancellation, but got none")
-// 	}
-// }
+func (m *MockNvmlDevice) DeviceGetHandleByIndex(index int) (*nvml.Device, nvml.Return) {
+	args := m.Called(index)
+	return args.Get(0).(*nvml.Device), args.Get(1).(nvml.Return)
+}
 
-// func TestFetchAllGpuInfo_ContextCancellation(t *testing.T) {
-// 	// Create a mock GpuDeviceManager
-// 	gpu := &mockGpuDeviceManager{}
-
-// 	// Set up the mock to return 2 devices
-// 	gpu.On("DeviceGetCount").Return(2, nvml.SUCCESS)
-
-// 	// Create a context
-// 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-// 	defer cancel()
-
-// 	// Cancel the context immediately
-// 	cancel()
-
-// 	// Call the function under test
-// 	gpuMap, err := FetchAllGpuInfo(ctx, gpu, 2)
-
-// 	// Assert the result
-// 	if err == nil {
-// 		t.Errorf("Expected an error due to context cancellation, but got none")
-// 	}
-// }
-
-// func TestFetchAllGpuInfo_FetchDeviceMetricsError(t *testing.T) {
-// 	// Create a mock GpuDeviceManager
-// 	gpu := &mockGpuDeviceManager{}
-
-// 	// Set up the mock to return 2 devices
-// 	gpu.On("DeviceGetCount").Return(2, nvml.SUCCESS)
-
-// 	// Set up the mock to return device handles for each index
-// 	gpu.On("DeviceGetHandleByIndex", 0).Return(&nvml.Device{}, nvml.SUCCESS)
-// 	gpu.On("DeviceGetHandleByIndex", 1).Return(&nvml.Device{}, nvml.SUCCESS)
-
-// 	// Set up the mock to return an error for metrics retrieval
-// 	gpu.On("FetchDeviceMetrics", &nvml.Device{}).Return(nil, nvml.ERROR_UNKNOWN)
-
-// 	// Create a context
-// 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-// 	defer cancel()
-
-// 	// Call the function under test
-// 	gpuMap, err := FetchAllGpuInfo(ctx, gpu, 2)
-
-// 	// Assert the result
-// 	if err == nil {
-// 		t.Errorf("Expected an error due to metrics retrieval failure, but got none")
-// 	}
-// }
-
-// type mockGpuDeviceManager struct {
-// 	mock.Mock
-// }
-
-// func (m *mockGpuDeviceManager) Init() nvml.Return {
-// 	return nvml.SUCCESS
-// }
-
-// func (m *mockGpuDeviceManager) Shutdown() nvml.Return {
-// 	return nvml.SUCCESS
-// }
-
-// func (m *mockGpuDeviceManager) GetDevice() nvml.Device {
-// 	// Return a mock device
-// 	return m.GetDevice()
-// }
-
-// func (m *mockGpuDeviceManager) DeviceGetCount() (int, nvml.Return) {
-// 	return 1, nvml.SUCCESS
-// }
-
-// func (m *mockGpuDeviceManager) DeviceGetHandleByIndex(index int) (nvml.Device, nvml.Return) {
-// 	if index == 0 {
-// 		// Return a mock device
-// 		return m.GetDevice(), nvml.SUCCESS
-// 	} else {
-// 		return nil, nvml.ERROR_UNKNOWN
-// 	}
-// }
+func (m *MockNvmlDevice) FetchDeviceMetrics(device *nvml.Device) (*NvidiaDevice, nvml.Return) {
+	args := m.Called(device)
+	return args.Get(0).(*NvidiaDevice), args.Get(1).(nvml.Return)
+}
