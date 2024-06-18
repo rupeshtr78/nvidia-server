@@ -22,49 +22,29 @@ func FetchAllGpuInfo(ctx context.Context, gpu GpuDeviceManager, count int) (GpuM
 	}
 
 	var mu sync.Mutex
-
 	errGroup, ctx := errgroup.WithContext(ctx)
-
 	gpuMap := make(GpuMap)
-
-	gpuResChan := make(chan *GpuResult, count) // Buffered channel for results
-	defer close(gpuResChan)
-
-	errChan := make(chan error, 1) // only need to store one error
-	defer close(errChan)
-
-	wg := new(sync.WaitGroup)
-	wg.Add(count)
 
 	for i := 0; i < count; i++ {
 
 		index := i
 		errGroup.Go(func() error {
-			defer wg.Done()
-
 			res, err := fetchGpuMetrics(gpu, index)
 			if err != nil {
-				errChan <- err
+				return err
 			}
 
 			if ctx.Err() != nil {
-				errChan <- ctx.Err()
+				return ctx.Err()
 			}
 
 			mu.Lock()
 			defer mu.Unlock()
 
-			gpuResChan <- res
+			gpuMap[res.index] = res.gpu
 
 			return nil
 		})
-	}
-
-	wg.Wait()
-
-	// main goroutine reads from gpuResChan and updates the gpuMap
-	for res := range gpuResChan {
-		gpuMap[res.index] = res.gpu
 	}
 
 	if err := errGroup.Wait(); err != nil {
@@ -77,10 +57,6 @@ func FetchAllGpuInfo(ctx context.Context, gpu GpuDeviceManager, count int) (GpuM
 
 	if len(gpuMap) != count {
 		return nil, fmt.Errorf("expected %d GPU devices, got %d", count, len(gpuMap))
-	}
-
-	if len(errChan) > 0 {
-		return nil, <-errChan
 	}
 
 	return gpuMap, nil
