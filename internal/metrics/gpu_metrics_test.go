@@ -5,43 +5,7 @@ import (
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
-
-// MockNvmlMetricsManager is a mock implementation of the NvmlMetricsManager interface
-type MockNvmlMetricsManager struct {
-	mock.Mock
-}
-
-func (m *MockNvmlMetricsManager) GetUUID() (string, nvml.Return) {
-	args := m.Called()
-	return args.String(0), args.Get(1).(nvml.Return)
-}
-
-func (m *MockNvmlMetricsManager) GetName() (string, nvml.Return) {
-	args := m.Called()
-	return args.String(0), args.Get(1).(nvml.Return)
-}
-
-func (m *MockNvmlMetricsManager) GetTemperature(sensorType nvml.TemperatureSensors) (uint32, nvml.Return) {
-	args := m.Called(sensorType)
-	return args.Get(0).(uint32), args.Get(1).(nvml.Return)
-}
-
-func (m *MockNvmlMetricsManager) GetPowerUsage() (uint32, nvml.Return) {
-	args := m.Called()
-	return args.Get(0).(uint32), args.Get(1).(nvml.Return)
-}
-
-func (m *MockNvmlMetricsManager) GetMemoryInfo() (nvml.Memory, nvml.Return) {
-	args := m.Called()
-	return args.Get(0).(nvml.Memory), args.Get(1).(nvml.Return)
-}
-
-func (m *MockNvmlMetricsManager) GetUtilizationRates() (nvml.Utilization, nvml.Return) {
-	args := m.Called()
-	return args.Get(0).(nvml.Utilization), args.Get(1).(nvml.Return)
-}
 
 func TestGetuUID(t *testing.T) {
 	mockDevice := new(MockNvmlMetricsManager)
@@ -65,7 +29,7 @@ func TestFetchDeviceMetrics(t *testing.T) {
 
 	mockDevice.On("GetUUID").Return("mock-uuid", nvml.SUCCESS)
 	mockDevice.On("GetName").Return("mock-name", nvml.SUCCESS)
-	mockDevice.On("GetTemperature", nvml.TEMPERATURE_GPU).Return(mockDevice.TestData().Value().Uint32(70), nvml.SUCCESS)
+	mockDevice.On("GetTemperature", nvml.TEMPERATURE_GPU).Return(uint32(70), nvml.SUCCESS)
 	mockDevice.On("GetPowerUsage").Return(uint32(150), nvml.SUCCESS)
 	mockDevice.On("GetMemoryInfo").Return(nvml.Memory{Total: 8192, Free: 4096, Used: 4096}, nvml.SUCCESS)
 	mockDevice.On("GetUtilizationRates").Return(nvml.Utilization{Gpu: 50, Memory: 30}, nvml.SUCCESS)

@@ -53,8 +53,6 @@ func NewGpuMap() GpuMap {
 // verify MeticManager implements the nvml.Device interface
 var _ GpuDeviceManager = &NvidiaDevice{}
 
-// var _ NvmlMetricsManager = &NvidiaDevice{}
-
 func NewNvidiaDevice() *NvidiaDevice {
 	return &NvidiaDevice{}
 }

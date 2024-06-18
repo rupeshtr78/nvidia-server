@@ -91,36 +91,36 @@ func (m *MockGpuDeviceManager) DeviceGetHandleByIndex(index int) (nvml.Device, n
 }
 
 // MockNvmlMetricsManager is a mock of NvmlMetricsManager interface
-type MockNvmlMetricsManagerV2 struct {
+type MockNvmlMetricsManager struct {
 	mock.Mock
 }
 
-func (m *MockNvmlMetricsManagerV2) GetUUID() (string, nvml.Return) {
+func (m *MockNvmlMetricsManager) GetUUID() (string, nvml.Return) {
 	args := m.Called()
 	return args.String(0), args.Get(1).(nvml.Return)
 }
 
-func (m *MockNvmlMetricsManagerV2) GetName() (string, nvml.Return) {
+func (m *MockNvmlMetricsManager) GetName() (string, nvml.Return) {
 	args := m.Called()
 	return args.String(0), args.Get(1).(nvml.Return)
 }
 
-func (m *MockNvmlMetricsManagerV2) GetTemperature(sensors nvml.TemperatureSensors) (uint32, nvml.Return) {
+func (m *MockNvmlMetricsManager) GetTemperature(sensors nvml.TemperatureSensors) (uint32, nvml.Return) {
 	args := m.Called(sensors)
 	return uint32(args.Int(0)), args.Get(1).(nvml.Return)
 }
 
-func (m *MockNvmlMetricsManagerV2) GetPowerUsage() (uint32, nvml.Return) {
+func (m *MockNvmlMetricsManager) GetPowerUsage() (uint32, nvml.Return) {
 	args := m.Called()
 	return uint32(args.Int(0)), args.Get(1).(nvml.Return)
 }
 
-func (m *MockNvmlMetricsManagerV2) GetMemoryInfo() (nvml.Memory, nvml.Return) {
+func (m *MockNvmlMetricsManager) GetMemoryInfo() (nvml.Memory, nvml.Return) {
 	args := m.Called()
 	return args.Get(0).(nvml.Memory), args.Get(1).(nvml.Return)
 }
 
-func (m *MockNvmlMetricsManagerV2) GetUtilizationRates() (nvml.Utilization, nvml.Return) {
+func (m *MockNvmlMetricsManager) GetUtilizationRates() (nvml.Utilization, nvml.Return) {
 	args := m.Called()
 	return args.Get(0).(nvml.Utilization), args.Get(1).(nvml.Return)
 }
