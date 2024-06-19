@@ -107,12 +107,12 @@ func (m *MockNvmlMetricsManager) GetName() (string, nvml.Return) {
 
 func (m *MockNvmlMetricsManager) GetTemperature(sensors nvml.TemperatureSensors) (uint32, nvml.Return) {
 	args := m.Called(sensors)
-	return uint32(args.Int(0)), args.Get(1).(nvml.Return)
+	return args.Get(0).(uint32), args.Get(1).(nvml.Return)
 }
 
 func (m *MockNvmlMetricsManager) GetPowerUsage() (uint32, nvml.Return) {
 	args := m.Called()
-	return uint32(args.Int(0)), args.Get(1).(nvml.Return)
+	return args.Get(0).(uint32), args.Get(1).(nvml.Return)
 }
 
 func (m *MockNvmlMetricsManager) GetMemoryInfo() (nvml.Memory, nvml.Return) {
