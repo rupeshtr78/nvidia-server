@@ -5,83 +5,51 @@ import (
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
-// MockNvmlMetricsManager is a mock implementation of the NvmlMetricsManager interface
-type MockNvmlMetricsManager struct {
-	mock.Mock
-}
-
-func (m *MockNvmlMetricsManager) GetUUID() (string, nvml.Return) {
-	args := m.Called()
-	return args.String(0), args.Get(1).(nvml.Return)
-}
-
-func (m *MockNvmlMetricsManager) GetName() (string, nvml.Return) {
-	args := m.Called()
-	return args.String(0), args.Get(1).(nvml.Return)
-}
-
-func (m *MockNvmlMetricsManager) GetTemperature(sensorType nvml.TemperatureSensors) (uint32, nvml.Return) {
-	args := m.Called(sensorType)
-	return args.Get(0).(uint32), args.Get(1).(nvml.Return)
-}
-
-func (m *MockNvmlMetricsManager) GetPowerUsage() (uint32, nvml.Return) {
-	args := m.Called()
-	return args.Get(0).(uint32), args.Get(1).(nvml.Return)
-}
-
-func (m *MockNvmlMetricsManager) GetMemoryInfo() (nvml.Memory, nvml.Return) {
-	args := m.Called()
-	return args.Get(0).(nvml.Memory), args.Get(1).(nvml.Return)
-}
-
-func (m *MockNvmlMetricsManager) GetUtilizationRates() (nvml.Utilization, nvml.Return) {
-	args := m.Called()
-	return args.Get(0).(nvml.Utilization), args.Get(1).(nvml.Return)
-}
-
-func TestGetuUID(t *testing.T) {
-	mockDevice := new(MockNvmlMetricsManager)
-
-	// Set up the mock to return specific values
-	mockDevice.On("GetUUID").Return("mock-uuid", nvml.SUCCESS)
-
-	// Call the function under test
-	uuid, ret := mockDevice.GetUUID()
-
-	// Assert the results
-	assert.Equal(t, "mock-uuid", uuid)
-	assert.Equal(t, nvml.SUCCESS, ret)
-
-	// Verify that the method was called
-	mockDevice.AssertExpectations(t)
-}
-
 func TestFetchDeviceMetrics(t *testing.T) {
-	mockDevice := new(MockNvmlMetricsManager)
+	m := &MockNvmlMetricsManager{}
+	deviceUUID := "device-uuid"
+	deviceName := "device-name"
+	deviceTemp := uint32(70)
+	devicePower := uint32(100)
+	deviceMemoryTotal := uint64(1024)
+	deviceMemoryFree := uint64(512)
+	deviceMemoryUsed := uint64(256)
+	deviceUtilizationGpu := uint32(50)
+	deviceUtilizationMemory := uint32(20)
 
-	mockDevice.On("GetUUID").Return("mock-uuid", nvml.SUCCESS)
-	mockDevice.On("GetName").Return("mock-name", nvml.SUCCESS)
-	mockDevice.On("GetTemperature", nvml.TEMPERATURE_GPU).Return(mockDevice.TestData().Value().Uint32(70), nvml.SUCCESS)
-	mockDevice.On("GetPowerUsage").Return(uint32(150), nvml.SUCCESS)
-	mockDevice.On("GetMemoryInfo").Return(nvml.Memory{Total: 8192, Free: 4096, Used: 4096}, nvml.SUCCESS)
-	mockDevice.On("GetUtilizationRates").Return(nvml.Utilization{Gpu: 50, Memory: 30}, nvml.SUCCESS)
+	m.On("GetUUID").Return(deviceUUID, nvml.SUCCESS)
+	m.On("GetName").Return(deviceName, nvml.SUCCESS)
+	m.On("GetTemperature", nvml.TEMPERATURE_GPU).Return(deviceTemp, nvml.SUCCESS)
+	m.On("GetPowerUsage").Return(devicePower, nvml.SUCCESS)
+	m.On("GetMemoryInfo").Return(nvml.Memory{Total: deviceMemoryTotal, Free: deviceMemoryFree, Used: deviceMemoryUsed}, nvml.SUCCESS)
+	m.On("GetUtilizationRates").Return(nvml.Utilization{Gpu: deviceUtilizationGpu, Memory: deviceUtilizationMemory}, nvml.SUCCESS)
 
-	device, ret := FetchDeviceMetrics(mockDevice)
-	assert.Equal(t, nvml.SUCCESS, ret)
-	assert.NotNil(t, device)
-	assert.Equal(t, "mock-uuid", device.UUID)
-	assert.Equal(t, "mock-name", device.Name)
-	assert.Equal(t, uint32(70), device.Temperature)
-	assert.Equal(t, uint32(150), device.Power)
-	assert.Equal(t, uint64(8192), device.MemoryTotal)
-	assert.Equal(t, uint64(4096), device.MemoryFree)
-	assert.Equal(t, uint64(4096), device.MemoryUsed)
-	assert.Equal(t, uint32(50), device.UtilizationGpu)
-	assert.Equal(t, uint32(30), device.UtilizationMemory)
+	result, err := FetchDeviceMetrics(m)
+	assert.Equal(t, err, nvml.SUCCESS)
+	assert.Equal(t, deviceUUID, result.UUID)
+	assert.Equal(t, deviceName, result.Name)
+	assert.Equal(t, deviceTemp, result.Temperature)
+	assert.Equal(t, devicePower, result.Power)
+	assert.Equal(t, deviceMemoryTotal, result.MemoryTotal)
+	assert.Equal(t, deviceMemoryFree, result.MemoryFree)
+	assert.Equal(t, deviceMemoryUsed, result.MemoryUsed)
+	assert.Equal(t, deviceUtilizationGpu, result.UtilizationGpu)
+	assert.Equal(t, deviceUtilizationMemory, result.UtilizationMemory)
+}
 
-	mockDevice.AssertExpectations(t)
+func TestFetchDeviceMetrics_Error(t *testing.T) {
+	m := &MockNvmlMetricsManager{}
+	m.On("GetUUID").Return("", nvml.ERROR_INVALID_ARGUMENT)
+	m.On("GetTemperature", nvml.TEMPERATURE_GPU).Return("", nvml.ERROR_INVALID_ARGUMENT)
+	m.On("GetName").Return("", nvml.ERROR_INVALID_ARGUMENT)
+	m.On("GetPowerUsage").Return("", nvml.ERROR_INVALID_ARGUMENT)
+	m.On("GetMemoryInfo").Return(nvml.Memory{}, nvml.ERROR_INVALID_ARGUMENT)
+	m.On("GetUtilizationRates").Return(nvml.Utilization{}, nvml.ERROR_INVALID_ARGUMENT)
+
+	result, err := FetchDeviceMetrics(m)
+	assert.Error(t, err)
+	assert.Nil(t, result)
+
 }
